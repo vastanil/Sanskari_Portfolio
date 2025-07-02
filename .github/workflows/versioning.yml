@@ -18,32 +18,20 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.PAT_TOKEN }}  # Use PAT instead of GITHUB_TOKEN
 
-      - name: Debug Git Info
+      - name: Set up Git user and credentials
         run: |
-          echo "== Git Debug Info =="
-          git --version
-          git config --list
-          echo "Current user: $(git config user.name) <$(git config user.email)>"
-          echo "Remote:"
-          git remote -v
-          echo "Current branch: $(git rev-parse --abbrev-ref HEAD)"
-          echo "HEAD commit:"
-          git log -1 --oneline
-          echo "====================="
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
 
-      - name: Set up Git
+      - name: Generate version and push tag
         run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "ci@github.com"
-
-      - name: Generate version and tag
-        run: |
-          set -x  # Echo every command
+          set -x
           BRANCH="${GITHUB_REF##*/}"
           DATE=$(date +%Y%m%d)
 
+          # Get latest tag or default
           LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0-$(date +%Y%m%d)")
           VERSION_PART=$(echo "$LATEST_TAG" | cut -d'-' -f1)
 
@@ -65,25 +53,19 @@ jobs:
           NEW_TAG="v$MAJOR.$MINOR.$PATCH-$DATE"
           echo "New tag will be: $NEW_TAG"
 
+          # Check if tag exists
           if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
-            echo "❌ Tag $NEW_TAG already exists. Skipping."
+            echo "❌ Tag $NEW_TAG already exists. Exiting."
             exit 0
           fi
 
-          # Create and push tag with full debug on failure
-          echo "Creating tag $NEW_TAG..."
+          # Create and push tag
           git tag "$NEW_TAG"
-
-          echo "Pushing tag $NEW_TAG to origin..."
           git push origin "$NEW_TAG" || {
             echo "❌ GIT PUSH FAILED"
-            echo "Git status:"
             git status
-            echo "Git branches:"
-            git branch -a
-            echo "Git remotes:"
             git remote -v
-            echo "Current HEAD:"
+            git branch
             git log -1
             exit 1
           }
