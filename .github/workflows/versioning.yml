@@ -34,8 +34,8 @@ jobs:
           BRANCH="${GITHUB_REF##*/}"
           echo "🧠 Branch: $BRANCH"
 
-          # Get latest tag matching semantic version format
-          LATEST_TAG=$(git tag | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
+          # Get latest semantic tag merged in current branch
+          LATEST_TAG=$(git tag --merged HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
           if [ -z "$LATEST_TAG" ]; then
             LATEST_TAG="v0.0.0"
           fi
@@ -46,7 +46,7 @@ jobs:
           MINOR=$(echo "$VERSION" | cut -d. -f2)
           PATCH=$(echo "$VERSION" | cut -d. -f3)
 
-          # Ensure numeric
+          # Ensure numeric conversion
           MAJOR=$((MAJOR + 0))
           MINOR=$((MINOR + 0))
           PATCH=$((PATCH + 0))
@@ -76,9 +76,9 @@ jobs:
           NEW_TAG="v$MAJOR.$MINOR.$PATCH"
           echo "🆕 New tag to create: $NEW_TAG"
 
-          # Check if tag exists already
-          if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
-            echo "⚠️ Tag $NEW_TAG already exists. Skipping."
+          # Skip if commit is already tagged
+          if git tag --points-at HEAD | grep -q "$NEW_TAG"; then
+            echo "⚠️ Commit already tagged with $NEW_TAG. Skipping."
             exit 0
           fi
 
