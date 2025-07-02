@@ -46,7 +46,7 @@ jobs:
           MINOR=$(echo "$VERSION" | cut -d. -f2)
           PATCH=$(echo "$VERSION" | cut -d. -f3)
 
-          # Fallback to 0 if empty
+          # Fallback defaults
           MAJOR=${MAJOR:-0}
           MINOR=${MINOR:-0}
           PATCH=${PATCH:-0}
@@ -56,20 +56,23 @@ jobs:
           MINOR=$((MINOR + 0))
           PATCH=$((PATCH + 0))
 
-          # Determine bump rule
+          # Version bump logic
           if [[ "$BRANCH" == "develop" ]]; then
             echo "📦 Rule: develop → MINOR bump"
-            ((MINOR++)); PATCH=0
+            ((++MINOR))
+            PATCH=0
           elif [[ "$BRANCH" == "main" ]]; then
             MERGED_BRANCH=$(git log -1 --pretty=%B | grep -oE 'Merge pull request #[0-9]+ from .*/(.*)' | awk '{print $NF}')
             echo "🔍 Merged branch: $MERGED_BRANCH"
 
             if [[ "$MERGED_BRANCH" == release_* ]]; then
               echo "🚀 Rule: release_* → MAJOR bump"
-              ((MAJOR++)); MINOR=0; PATCH=0
+              ((++MAJOR))
+              MINOR=0
+              PATCH=0
             elif [[ "$MERGED_BRANCH" == hotfix_* ]]; then
               echo "🩹 Rule: hotfix_* → PATCH bump"
-              ((PATCH++))
+              ((++PATCH))
             else
               echo "⚠️ No rule matched for main. Skipping."
               exit 0
