@@ -28,23 +28,24 @@ jobs:
       - name: Determine version bump and tag
         run: |
           set -e
-          set -x
-
           BRANCH="${GITHUB_REF##*/}"
           echo "🧠 Branch: $BRANCH"
 
-          # Get latest tag
+          # Get the latest tag (stable format only)
           LATEST_TAG=$(git tag | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
           if [ -z "$LATEST_TAG" ]; then
             LATEST_TAG="v0.0.0"
           fi
 
           echo "🔖 Latest tag: $LATEST_TAG"
-          VERSION="${LATEST_TAG#v}"
 
-          MAJOR=$(echo "$VERSION" | cut -d. -f1)
-          MINOR=$(echo "$VERSION" | cut -d. -f2)
-          PATCH=$(echo "$VERSION" | cut -d. -f3)
+          VERSION="${LATEST_TAG#v}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+
+          # Ensure numeric values
+          declare -i MAJOR MINOR PATCH
+
+          echo "Parsed version: MAJOR=$MAJOR MINOR=$MINOR PATCH=$PATCH"
 
           if [[ "$BRANCH" == "develop" ]]; then
             echo "📦 Rule: develop → MINOR bump"
@@ -75,12 +76,15 @@ jobs:
           fi
 
           NEW_TAG="v$MAJOR.$MINOR.$PATCH"
-          echo "🔧 New tag to be created: $NEW_TAG"
+          echo "🆕 New tag to create: $NEW_TAG"
 
+          # Check if tag already exists
           if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
             echo "⚠️ Tag $NEW_TAG already exists. Skipping."
             exit 0
           fi
 
-          git tag "$NEW_TAG"
-          git push origin "$NEW_TAG"
+          git tag "$NEW_TAG" || { echo "❌ Failed to create tag $NEW_TAG"; exit 1; }
+          git push origin "$NEW_TAG" || { echo "❌ Failed to push tag $NEW_TAG"; git status; git log -1; exit 1; }
+
+          echo "✅ Tag $NEW_TAG created and pushed successfully!"
