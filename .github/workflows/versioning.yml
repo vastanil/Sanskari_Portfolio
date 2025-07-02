@@ -1,9 +1,10 @@
-name: Auto-Increment Semantic Tag
+name: Auto Semantic Versioning
 
 on:
   push:
     branches:
-      - '**'
+      - master
+      - develop
 
 permissions:
   contents: write
@@ -25,48 +26,63 @@ jobs:
           git config --global user.email "anild@valueaddsofttech.com"
           git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
 
-      - name: Calculate and push new version tag
+      - name: Determine version bump type and create tag
         run: |
           set -e
-
+          DATE=$(date +%Y%m%d)
           BRANCH="${GITHUB_REF##*/}"
-          echo "📍 Current branch: $BRANCH"
 
-          # Get the latest tag or default
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          echo "🔍 Latest tag: $LATEST_TAG"
+          echo "🧠 Working on branch: $BRANCH"
 
-          # Extract version numbers
-          VERSION=$(echo "$LATEST_TAG" | sed 's/^v//')
+          # Get the latest version tag or default
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0-00000000")
+          BASE_VERSION=$(echo "$LATEST_TAG" | cut -d'-' -f1)
+          echo "🔖 Latest tag: $LATEST_TAG"
+
+          # Strip 'v' and extract MAJOR.MINOR.PATCH
+          VERSION=$(echo "$BASE_VERSION" | sed 's/^v//')
           MAJOR=$(echo "$VERSION" | cut -d. -f1)
           MINOR=$(echo "$VERSION" | cut -d. -f2)
           PATCH=$(echo "$VERSION" | cut -d. -f3)
 
-          if [[ "$BRANCH" == "master" ]]; then
-            ((MAJOR++))
-            MINOR=0
+          # Determine the bump type
+          if [[ "$BRANCH" == "develop" ]]; then
+            echo "📦 Rule: Push to develop → MINOR bump"
+            ((MINOR++))
             PATCH=0
-            echo "🚀 Master branch detected — bumping MAJOR"
+          elif [[ "$BRANCH" == "main" ]]; then
+            # Detect merged branch name
+            MERGED_BRANCH=$(git log -1 --pretty=%B | grep -oE 'Merge pull request #[0-9]+ from .*/(.*)' | awk '{print $NF}')
+            echo "🔍 Detected merged branch: $MERGED_BRANCH"
+
+            if [[ "$MERGED_BRANCH" == release_* ]]; then
+              echo "🚀 Rule: release_* merged into main → MAJOR bump"
+              ((MAJOR++))
+              MINOR=0
+              PATCH=0
+            elif [[ "$MERGED_BRANCH" == hotfix_* ]]; then
+              echo "🩹 Rule: hotfix_* merged into main → PATCH bump"
+              ((PATCH++))
+            else
+              echo "❌ No matching rule for merged branch: $MERGED_BRANCH"
+              exit 0
+            fi
           else
-            ((PATCH++))
-            echo "🔧 Non-master branch — bumping PATCH"
+            echo "❌ No rule matched for branch: $BRANCH"
+            exit 0
           fi
 
-          NEW_TAG="v$MAJOR.$MINOR.$PATCH"
+          NEW_TAG="v$MAJOR.$MINOR.$PATCH-$DATE"
           echo "🆕 New tag: $NEW_TAG"
 
-          # Check if already exists
+          # Check if tag already exists
           if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
             echo "⚠️ Tag $NEW_TAG already exists. Skipping."
             exit 0
           fi
 
-          # Check push permission
-          if ! git push --dry-run origin HEAD:refs/tags/"$NEW_TAG"; then
-            echo "❌ Cannot push tag. Permission denied."
-            exit 1
-          fi
-
+          echo "🏷️ Creating and pushing tag..."
           git tag "$NEW_TAG"
           git push origin "$NEW_TAG"
-          echo "✅ Tag $NEW_TAG pushed successfully!"
+
+          echo "✅ Tag $NEW_TAG pushed successfully!!"
