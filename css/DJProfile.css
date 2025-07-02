@@ -2,6 +2,7 @@
 *::after,
 *::before {
     box-sizing: border-box;1111
+
 }
 
 html {
@@ -196,7 +197,7 @@ header {
 
 #events-text {
     color: #ddfffd;
-    font-size: 2.2rem;
+    font-size: 1.5rem;
 }
 
 #current-place {
