@@ -3,8 +3,8 @@ name: Auto Semantic Versioning
 on:
   push:
     branches:
-      - master
       - develop
+      - master
 
 permissions:
   contents: write
@@ -14,64 +14,58 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # required to get all tags
+          fetch-depth: 0
 
       - name: Configure Git
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
 
-      - name: Determine Version and Tag
+      - name: Determine version and create tag
         run: |
           set -e
-
-          BRANCH="${GITHUB_REF##*/}"
+          BRANCH=$(git rev-parse --abbrev-ref HEAD)
           echo "🧠 Branch: $BRANCH"
 
-          # Get latest semantic version tag
-
+          # Find latest tag
           LATEST_TAG=$(git tag | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
           if [ -z "$LATEST_TAG" ]; then
             LATEST_TAG="v0.0.0"
           fi
-
           echo "🔖 Latest tag: $LATEST_TAG"
-          VERSION="${LATEST_TAG#v}"
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
 
-          # Ensure numeric format
-          MAJOR=$((10#$MAJOR))
-          MINOR=$((10#$MINOR))
-          PATCH=$((10#$PATCH))
-
-
+          VERSION=${LATEST_TAG#v}
+          IFS=. read -r MAJOR MINOR PATCH <<< "$VERSION"
           echo "Parsed version: MAJOR=$MAJOR MINOR=$MINOR PATCH=$PATCH"
 
-          # Handle branch-specific rules
           if [[ "$BRANCH" == "develop" ]]; then
             echo "📦 Rule: develop → MINOR bump"
-            ((MINOR++))
+            MAJOR=$MAJOR
+            MINOR=$((MINOR + 1))
             PATCH=0
 
           elif [[ "$BRANCH" == "master" ]]; then
-            MERGED_BRANCH=$(git log -1 --pretty=%B | grep -oE 'Merge pull request #[0-9]+ from .*/(.*)' | sed 's:.*/::')
-
+            MERGE_COMMIT_MSG=$(git log -1 --pretty=%B)
+            echo "🔍 Merge commit message: $MERGE_COMMIT_MSG"
+            MERGED_BRANCH=$(echo "$MERGE_COMMIT_MSG" | grep -oE 'from [^ ]+' | awk '{print $2}' | sed 's:.*/::')
             echo "🔍 Merged branch: $MERGED_BRANCH"
 
             if [[ "$MERGED_BRANCH" == release_* ]]; then
               echo "🚀 Rule: release_* → MAJOR bump"
-
-              ((MAJOR++))
-
+              echo "Before bump: MAJOR=$MAJOR MINOR=$MINOR PATCH=$PATCH"
+              MAJOR=$((MAJOR + 1))
               MINOR=0
               PATCH=0
+              echo "After bump: MAJOR=$MAJOR MINOR=$MINOR PATCH=$PATCH"
+
             elif [[ "$MERGED_BRANCH" == hotfix_* ]]; then
               echo "🩹 Rule: hotfix_* → PATCH bump"
-              ((++PATCH))
+              PATCH=$((PATCH + 1))
+
             else
               echo "⚠️ No matching rule for merged branch. Skipping."
               exit 0
@@ -83,16 +77,14 @@ jobs:
           fi
 
           NEW_TAG="v$MAJOR.$MINOR.$PATCH"
-          echo "🔖 New tag: $NEW_TAG"
+          echo "🏷️ New tag to create: $NEW_TAG"
 
           if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
             echo "⚠️ Tag $NEW_TAG already exists. Skipping."
             exit 0
           fi
 
-
-          git tag "$NEW_TAG" || { echo "❌ Failed to create tag"; exit 1; }
-          git push origin "$NEW_TAG" || { echo "❌ Failed to push tag"; exit 1; }
-
+          git tag "$NEW_TAG" || { echo "❌ Failed to create git tag"; git tag; exit 1; }
+          git push origin "$NEW_TAG" || { echo "❌ Failed to push git tag"; git status; git log -1; exit 1; }
 
           echo "✅ Tag $NEW_TAG created and pushed successfully!"
