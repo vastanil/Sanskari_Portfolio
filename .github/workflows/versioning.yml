@@ -14,45 +14,40 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
-
           fetch-depth: 0
 
-      - name: Configure Git credentials
+      - name: Set up Git
         run: |
-          git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
           git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
 
-
-      - name: Determine Version and Tag
+      - name: Determine version bump and create tag
         run: |
           set -e
-
-          set -x
-
           BRANCH="${GITHUB_REF##*/}"
           echo "🧠 Branch: $BRANCH"
 
-          # Get latest tag
+          # Get latest tag or use fallback
           LATEST_TAG=$(git tag | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
           if [ -z "$LATEST_TAG" ]; then
             LATEST_TAG="v0.0.0"
           fi
-
           echo "🔖 Latest tag: $LATEST_TAG"
+
+          # Remove 'v' prefix and parse version
           VERSION="${LATEST_TAG#v}"
           IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
 
+          # Sanitize numbers
+          MAJOR=$(echo "$MAJOR" | tr -cd '0-9')
+          MINOR=$(echo "$MINOR" | tr -cd '0-9')
+          PATCH=$(echo "$PATCH" | tr -cd '0-9')
 
-          VERSION="${LATEST_TAG#v}"
-          MAJOR=$(echo "$VERSION" | cut -d. -f1)
-          MINOR=$(echo "$VERSION" | cut -d. -f2)
-          PATCH=$(echo "$VERSION" | cut -d. -f3)
           echo "Parsed version: MAJOR=$MAJOR MINOR=$MINOR PATCH=$PATCH"
-
 
           if [[ "$BRANCH" == "develop" ]]; then
             echo "📦 Rule: develop → MINOR bump"
@@ -60,24 +55,19 @@ jobs:
             PATCH=0
 
           elif [[ "$BRANCH" == "master" ]]; then
-            # Detect merged branch name from commit
             MERGE_COMMIT_MSG=$(git log -1 --pretty=%B)
             echo "🔍 Merge commit message: $MERGE_COMMIT_MSG"
 
             MERGED_BRANCH=$(echo "$MERGE_COMMIT_MSG" | grep -oE 'from [^ ]+' | awk '{print $2}' | sed 's:.*/::')
-
             echo "🔍 Merged branch: $MERGED_BRANCH"
 
             if [[ "$MERGED_BRANCH" == release_* ]]; then
               echo "🚀 Rule: release_* → MAJOR bump"
-
               ((MAJOR++))
-
               MINOR=0
               PATCH=0
             elif [[ "$MERGED_BRANCH" == hotfix_* ]]; then
               echo "🩹 Rule: hotfix_* → PATCH bump"
-
               ((PATCH++))
             else
               echo "⚠️ No matching rule for merged branch. Skipping."
@@ -90,16 +80,15 @@ jobs:
           fi
 
           NEW_TAG="v$MAJOR.$MINOR.$PATCH"
+          echo "🔖 New tag to create: $NEW_TAG"
 
-          echo "🏷️ New tag: $NEW_TAG"
-
-
+          # Check if tag already exists
           if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
             echo "⚠️ Tag $NEW_TAG already exists. Skipping."
             exit 0
           fi
 
-          git tag "$NEW_TAG"
-          git push origin "$NEW_TAG"
-          echo "✅ Tag $NEW_TAG pushed successfully!"
-
+          # Create and push the new tag
+          git tag "$NEW_TAG" || { echo "❌ Failed to create tag"; exit 1; }
+          git push origin "$NEW_TAG" || { echo "❌ Failed to push tag"; git status; git log -1; exit 1; }
+          echo "✅ Pushed tag: $NEW_TAG"
