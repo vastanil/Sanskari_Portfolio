@@ -3,7 +3,7 @@ name: Auto Semantic Versioning
 on:
   push:
     branches:
-      - master
+      - main
       - develop
 
 permissions:
@@ -29,29 +29,30 @@ jobs:
       - name: Determine version bump type and create tag
         run: |
           set -e
+          set -x
+
           DATE=$(date +%Y%m%d)
           BRANCH="${GITHUB_REF##*/}"
-
           echo "🧠 Working on branch: $BRANCH"
 
-          # Get the latest version tag or default
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0-00000000")
-          BASE_VERSION=$(echo "$LATEST_TAG" | cut -d'-' -f1)
+          # Get latest tag or fallback
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null)
+          if [ -z "$LATEST_TAG" ]; then
+            LATEST_TAG="v0.0.0-00000000"
+          fi
           echo "🔖 Latest tag: $LATEST_TAG"
 
-          # Strip 'v' and extract MAJOR.MINOR.PATCH
+          BASE_VERSION=$(echo "$LATEST_TAG" | cut -d'-' -f1)
           VERSION=$(echo "$BASE_VERSION" | sed 's/^v//')
           MAJOR=$(echo "$VERSION" | cut -d. -f1)
           MINOR=$(echo "$VERSION" | cut -d. -f2)
           PATCH=$(echo "$VERSION" | cut -d. -f3)
 
-          # Determine the bump type
           if [[ "$BRANCH" == "develop" ]]; then
             echo "📦 Rule: Push to develop → MINOR bump"
             ((MINOR++))
             PATCH=0
           elif [[ "$BRANCH" == "main" ]]; then
-            # Detect merged branch name
             MERGED_BRANCH=$(git log -1 --pretty=%B | grep -oE 'Merge pull request #[0-9]+ from .*/(.*)' | awk '{print $NF}')
             echo "🔍 Detected merged branch: $MERGED_BRANCH"
 
@@ -64,11 +65,11 @@ jobs:
               echo "🩹 Rule: hotfix_* merged into main → PATCH bump"
               ((PATCH++))
             else
-              echo "❌ No matching rule for merged branch: $MERGED_BRANCH"
+              echo "⚠️ No version rule matched. Skipping."
               exit 0
             fi
           else
-            echo "❌ No rule matched for branch: $BRANCH"
+            echo "⚠️ No versioning rule for branch: $BRANCH"
             exit 0
           fi
 
@@ -82,7 +83,8 @@ jobs:
           fi
 
           echo "🏷️ Creating and pushing tag..."
-          git tag "$NEW_TAG"
-          git push origin "$NEW_TAG"
+          git tag "$NEW_TAG" || { echo "❌ Failed to create git tag"; git tag; exit 1; }
+          git remote -v
+          git push origin "$NEW_TAG" || { echo "❌ Failed to push git tag"; git status; git log -1; exit 1; }
 
-          echo "✅ Tag $NEW_TAG pushed successfully!!"
+          echo "✅ Tag $NEW_TAG pushed successfully!"
