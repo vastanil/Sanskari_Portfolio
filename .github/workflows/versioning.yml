@@ -1,15 +1,15 @@
-name: Simple Auto Versioning
+name: Push v1.0.1 Tag
 
 on:
   push:
     branches:
-      - '**'  # Trigger on all branches
+      - '**'
 
 permissions:
   contents: write
 
 jobs:
-  versioning:
+  tag:
     runs-on: ubuntu-latest
 
     steps:
@@ -19,48 +19,31 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Configure Git credentials
+      - name: Configure Git identity
         run: |
           git config --global user.name "Anil Doke"
           git config --global user.email "anild@valueaddsofttech.com"
           git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
 
-      - name: Generate and push version tag
+      - name: Check, create, and push tag
         run: |
-          set -x
-          DATE=$(date +%Y%m%d)
+          set -e
+          TAG_NAME="v1.0.1"
 
-          # Get latest tag or default
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0-$DATE")
-          VERSION_PART=$(echo "$LATEST_TAG" | cut -d'-' -f1)
-
-          # Strip 'v' and parse version numbers
-          NUM_VERSION=$(echo "$VERSION_PART" | sed 's/^v//')
-          MAJOR=$(echo "$NUM_VERSION" | cut -d'.' -f1)
-          MINOR=$(echo "$NUM_VERSION" | cut -d'.' -f2)
-          PATCH=$(echo "$NUM_VERSION" | cut -d'.' -f3)
-
-          # Safely increment patch
-          if [[ "$PATCH" =~ ^[0-9]+$ ]]; then
-            ((PATCH++))
-          else
-            PATCH=1
-          fi
-
-          NEW_TAG="v$MAJOR.$MINOR.$PATCH-$DATE"
-          echo "🔖 Creating new tag: $NEW_TAG"
-
-          # Skip if tag already exists
-          if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
-            echo "⚠️ Tag $NEW_TAG already exists. Skipping."
+          echo "🔍 Checking if tag $TAG_NAME already exists..."
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+            echo "⚠️ Tag $TAG_NAME already exists. Skipping."
             exit 0
           fi
 
-          git tag "$NEW_TAG"
-          git push origin "$NEW_TAG" || {
-            echo "❌ Tag push failed"
-            git status
+          echo "✅ Tag does not exist. Testing push access..."
+          if ! git push --dry-run origin HEAD:refs/tags/"$TAG_NAME"; then
+            echo "❌ You do not have permission to push tag $TAG_NAME."
             exit 1
-          }
+          fi
 
-          echo "✅ Tag pushed: $NEW_TAG"
+          echo "🔧 Creating and pushing tag $TAG_NAME..."
+          git tag "$TAG_NAME"
+          git push origin "$TAG_NAME"
+
+          echo "🎉 Tag $TAG_NAME pushed successfully!"
