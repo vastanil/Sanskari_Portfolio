@@ -31,41 +31,41 @@ jobs:
           set -e
           set -x
 
-          DATE=$(date +%Y%m%d)
           BRANCH="${GITHUB_REF##*/}"
-          echo "🧠 Working on branch: $BRANCH"
+          echo "🧠 Branch: $BRANCH"
 
-          # Get latest tag or fallback
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null)
+          # Get latest tag matching semantic version format
+          LATEST_TAG=$(git tag | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
           if [ -z "$LATEST_TAG" ]; then
-            LATEST_TAG="v0.0.0-00000000"
+            LATEST_TAG="v0.0.0"
           fi
           echo "🔖 Latest tag: $LATEST_TAG"
 
-          BASE_VERSION=$(echo "$LATEST_TAG" | cut -d'-' -f1)
-          VERSION=$(echo "$BASE_VERSION" | sed 's/^v//')
+          VERSION=${LATEST_TAG#v}
           MAJOR=$(echo "$VERSION" | cut -d. -f1)
           MINOR=$(echo "$VERSION" | cut -d. -f2)
           PATCH=$(echo "$VERSION" | cut -d. -f3)
 
+          # Ensure numeric
+          MAJOR=$((MAJOR + 0))
+          MINOR=$((MINOR + 0))
+          PATCH=$((PATCH + 0))
+
           if [[ "$BRANCH" == "develop" ]]; then
-            echo "📦 Rule: Push to develop → MINOR bump"
-            ((MINOR++))
-            PATCH=0
+            echo "📦 Rule: develop → MINOR bump"
+            ((MINOR++)); PATCH=0
           elif [[ "$BRANCH" == "main" ]]; then
             MERGED_BRANCH=$(git log -1 --pretty=%B | grep -oE 'Merge pull request #[0-9]+ from .*/(.*)' | awk '{print $NF}')
-            echo "🔍 Detected merged branch: $MERGED_BRANCH"
+            echo "🔍 Merged branch: $MERGED_BRANCH"
 
             if [[ "$MERGED_BRANCH" == release_* ]]; then
-              echo "🚀 Rule: release_* merged into main → MAJOR bump"
-              ((MAJOR++))
-              MINOR=0
-              PATCH=0
+              echo "🚀 Rule: release_* → MAJOR bump"
+              ((MAJOR++)); MINOR=0; PATCH=0
             elif [[ "$MERGED_BRANCH" == hotfix_* ]]; then
-              echo "🩹 Rule: hotfix_* merged into main → PATCH bump"
+              echo "🩹 Rule: hotfix_* → PATCH bump"
               ((PATCH++))
             else
-              echo "⚠️ No version rule matched. Skipping."
+              echo "⚠️ No rule matched for main. Skipping."
               exit 0
             fi
           else
@@ -73,18 +73,16 @@ jobs:
             exit 0
           fi
 
-          NEW_TAG="v$MAJOR.$MINOR.$PATCH-$DATE"
-          echo "🆕 New tag: $NEW_TAG"
+          NEW_TAG="v$MAJOR.$MINOR.$PATCH"
+          echo "🆕 New tag to create: $NEW_TAG"
 
-          # Check if tag already exists
+          # Check if tag exists already
           if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
             echo "⚠️ Tag $NEW_TAG already exists. Skipping."
             exit 0
           fi
 
-          echo "🏷️ Creating and pushing tag..."
-          git tag "$NEW_TAG" || { echo "❌ Failed to create git tag"; git tag; exit 1; }
-          git remote -v
-          git push origin "$NEW_TAG" || { echo "❌ Failed to push git tag"; git status; git log -1; exit 1; }
+          git tag "$NEW_TAG" || { echo "❌ Failed to create tag"; git tag; exit 1; }
+          git push origin "$NEW_TAG" || { echo "❌ Failed to push tag"; git status; git log -1; exit 1; }
 
-          echo "✅ Tag $NEW_TAG pushed successfully!"
+          echo "✅ Tag $NEW_TAG created and pushed successfully!"
