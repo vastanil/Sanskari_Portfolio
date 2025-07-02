@@ -25,21 +25,27 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
 
+
       - name: Determine version and tag
+
         run: |
           set -e
 
           BRANCH="${GITHUB_REF##*/}"
           echo "🧠 Branch: $BRANCH"
 
+
           # Get latest tag
+
           LATEST_TAG=$(git tag | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
           if [ -z "$LATEST_TAG" ]; then
             LATEST_TAG="v0.0.0"
           fi
 
+
           echo "🔖 Latest tag: $LATEST_TAG"
           VERSION="${LATEST_TAG#v}"
+
 
           IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
           echo "Parsed version: MAJOR=$MAJOR MINOR=$MINOR PATCH=$PATCH"
@@ -76,17 +82,17 @@ jobs:
               exit 0
             fi
           else
-            echo "⚠️ No versioning rule for branch: $BRANCH"
+            echo "⚠️ No rule for branch: $BRANCH"
             exit 0
           fi
 
           echo "🔖 New tag to create: $NEW_TAG"
 
-          # Check if tag already exists
           if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
             echo "⚠️ Tag $NEW_TAG already exists. Skipping."
             exit 0
           fi
+
 
           echo "🏷️ Creating tag..."
           git tag "$NEW_TAG" || {
@@ -101,3 +107,4 @@ jobs:
           }
 
           echo "✅ Tag $NEW_TAG pushed successfully!"
+
