@@ -3,7 +3,7 @@ name: Auto Semantic Versioning
 on:
   push:
     branches:
-      - main
+      - master
       - develop
 
 permissions:
