@@ -29,9 +29,10 @@ jobs:
       - name: Determine version bump type and create tag
         run: |
           set -e
+          set -x
+
           DATE=$(date +%Y%m%d)
           BRANCH="${GITHUB_REF##*/}"
-
           echo "🧠 Working on branch: $BRANCH"
 
           # Get latest tag or fallback
@@ -75,11 +76,15 @@ jobs:
           NEW_TAG="v$MAJOR.$MINOR.$PATCH-$DATE"
           echo "🆕 New tag: $NEW_TAG"
 
+          # Check if tag already exists
           if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
             echo "⚠️ Tag $NEW_TAG already exists. Skipping."
             exit 0
           fi
 
-          git tag "$NEW_TAG"
-          git push origin "$NEW_TAG"
+          echo "🏷️ Creating and pushing tag..."
+          git tag "$NEW_TAG" || { echo "❌ Failed to create git tag"; git tag; exit 1; }
+          git remote -v
+          git push origin "$NEW_TAG" || { echo "❌ Failed to push git tag"; git status; git log -1; exit 1; }
+
           echo "✅ Tag $NEW_TAG pushed successfully!"
