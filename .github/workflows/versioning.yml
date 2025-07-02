@@ -74,8 +74,8 @@ jobs:
             exit 0
           fi
 
-          TIMESTAMP=$(date +%Y%m%d-%H%M)
-          NEW_TAG="v$MAJOR.$MINOR.$PATCH-$TIMESTAMP"
+          DATE=$(date +%Y%m%d)
+          NEW_TAG="v$MAJOR.$MINOR.$PATCH-$DATE"
           echo "🏷️ New tag to create: $NEW_TAG"
 
           if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
