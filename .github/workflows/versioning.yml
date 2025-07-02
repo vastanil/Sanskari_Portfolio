@@ -1,9 +1,9 @@
 name: Simple Auto Versioning
 
 on:
-  push:  # Trigger on all branches
+  push:
     branches:
-      - '**'
+      - '**'  # Trigger on all branches
 
 permissions:
   contents: write
@@ -30,22 +30,27 @@ jobs:
           set -x
           DATE=$(date +%Y%m%d)
 
-          # Get latest tag or start from 0.0.0
+          # Get latest tag or default
           LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0-$DATE")
           VERSION_PART=$(echo "$LATEST_TAG" | cut -d'-' -f1)
 
-          MAJOR=$(echo "$VERSION_PART" | cut -d'.' -f1 | cut -c2-)
-          MINOR=$(echo "$VERSION_PART" | cut -d'.' -f2)
-          PATCH=$(echo "$VERSION_PART" | cut -d'.' -f3)
+          # Strip 'v' and parse version numbers
+          NUM_VERSION=$(echo "$VERSION_PART" | sed 's/^v//')
+          MAJOR=$(echo "$NUM_VERSION" | cut -d'.' -f1)
+          MINOR=$(echo "$NUM_VERSION" | cut -d'.' -f2)
+          PATCH=$(echo "$NUM_VERSION" | cut -d'.' -f3)
 
-          ((MAJOR++))
-          ((MINOR++))
-          ((PATCH++))
+          # Safely increment patch
+          if [[ "$PATCH" =~ ^[0-9]+$ ]]; then
+            ((PATCH++))
+          else
+            PATCH=1
+          fi
 
           NEW_TAG="v$MAJOR.$MINOR.$PATCH-$DATE"
           echo "🔖 Creating new tag: $NEW_TAG"
 
-          # Skip if tag exists
+          # Skip if tag already exists
           if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
             echo "⚠️ Tag $NEW_TAG already exists. Skipping."
             exit 0
@@ -54,6 +59,7 @@ jobs:
           git tag "$NEW_TAG"
           git push origin "$NEW_TAG" || {
             echo "❌ Tag push failed"
+            git status
             exit 1
           }
 
