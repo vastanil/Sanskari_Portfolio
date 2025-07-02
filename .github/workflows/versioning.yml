@@ -1,4 +1,4 @@
-name: Push v1.0.1 Tag
+name: Auto-Increment Patch Tag
 
 on:
   push:
@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code with token
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -25,25 +25,41 @@ jobs:
           git config --global user.email "anild@valueaddsofttech.com"
           git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
 
-      - name: Check, create, and push tag
+      - name: Get latest tag and create next tag
         run: |
           set -e
-          TAG_NAME="v1.0.1"
 
-          echo "🔍 Checking if tag $TAG_NAME already exists..."
-          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
-            echo "⚠️ Tag $TAG_NAME already exists. Skipping."
+          # Get the latest tag or use v0.0.0
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "🔍 Latest tag is $LATEST_TAG"
+
+          # Parse version
+          VERSION=$(echo "$LATEST_TAG" | sed 's/^v//')
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          PATCH=$(echo "$VERSION" | cut -d. -f3)
+
+          # Increment patch
+          PATCH=$((PATCH + 1))
+
+          # Compose new tag
+          NEW_TAG="v$MAJOR.$MINOR.$PATCH"
+          echo "✨ New tag will be $NEW_TAG"
+
+          # Check if tag already exists
+          if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
+            echo "⚠️ Tag $NEW_TAG already exists. Skipping."
             exit 0
           fi
 
-          echo "✅ Tag does not exist. Testing push access..."
-          if ! git push --dry-run origin HEAD:refs/tags/"$TAG_NAME"; then
-            echo "❌ You do not have permission to push tag $TAG_NAME."
+          # Dry run push check
+          if ! git push --dry-run origin HEAD:refs/tags/"$NEW_TAG"; then
+            echo "❌ You do not have permission to push $NEW_TAG"
             exit 1
           fi
 
-          echo "🔧 Creating and pushing tag $TAG_NAME..."
-          git tag "$TAG_NAME"
-          git push origin "$TAG_NAME"
+          # Create and push new tag
+          git tag "$NEW_TAG"
+          git push origin "$NEW_TAG"
 
-          echo "🎉 Tag $TAG_NAME pushed successfully!"
+          echo "✅ Pushed new tag: $NEW_TAG"
