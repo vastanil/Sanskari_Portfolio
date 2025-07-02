@@ -34,7 +34,7 @@ jobs:
           BRANCH="${GITHUB_REF##*/}"
           echo "🧠 Branch: $BRANCH"
 
-          # Get latest semantic version tag
+          # Get latest tag matching semantic version format
           LATEST_TAG=$(git tag | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
           if [ -z "$LATEST_TAG" ]; then
             LATEST_TAG="v0.0.0"
@@ -45,6 +45,11 @@ jobs:
           MAJOR=$(echo "$VERSION" | cut -d. -f1)
           MINOR=$(echo "$VERSION" | cut -d. -f2)
           PATCH=$(echo "$VERSION" | cut -d. -f3)
+
+          # Ensure numeric
+          MAJOR=$((MAJOR + 0))
+          MINOR=$((MINOR + 0))
+          PATCH=$((PATCH + 0))
 
           if [[ "$BRANCH" == "develop" ]]; then
             echo "📦 Rule: develop → MINOR bump"
@@ -60,7 +65,7 @@ jobs:
               echo "🩹 Rule: hotfix_* → PATCH bump"
               ((PATCH++))
             else
-              echo "⚠️ No rule matched. Skipping."
+              echo "⚠️ No rule matched for main. Skipping."
               exit 0
             fi
           else
@@ -71,6 +76,7 @@ jobs:
           NEW_TAG="v$MAJOR.$MINOR.$PATCH"
           echo "🆕 New tag to create: $NEW_TAG"
 
+          # Check if tag exists already
           if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
             echo "⚠️ Tag $NEW_TAG already exists. Skipping."
             exit 0
