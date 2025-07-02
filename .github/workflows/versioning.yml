@@ -32,6 +32,7 @@ jobs:
           echo "🧠 Branch: $BRANCH"
 
           # Find latest semantic tag
+
           LATEST_TAG=$(git tag | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
           if [ -z "$LATEST_TAG" ]; then
             LATEST_TAG="v0.0.0"
@@ -60,6 +61,7 @@ jobs:
               MINOR=0
               PATCH=0
 
+
             elif [[ "$MERGED_BRANCH" == hotfix_* ]]; then
               echo "🩹 Rule: hotfix_* → PATCH bump"
               PATCH=$((PATCH + 1))
@@ -76,6 +78,7 @@ jobs:
 
           TIMESTAMP=$(date +%Y%m%d-%H%M%S)
           NEW_TAG="v$MAJOR.$MINOR.$PATCH-$TIMESTAMP"
+
           echo "🏷️ New tag to create: $NEW_TAG"
 
           if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
