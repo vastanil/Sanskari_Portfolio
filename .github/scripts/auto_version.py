@@ -13,36 +13,40 @@ tags = sorted(repo.tags, key=lambda t: t.commit.committed_datetime)
 latest_tag = next((str(t) for t in reversed(tags) if str(t).startswith("v")), "v0.0.0")
 print(f"🔖 Latest tag: {latest_tag}")
 
-# Parse version
-version = latest_tag.lstrip("v").split("-")[0]  # remove timestamp if any
+# Parse version (strip date suffix if any)
+version = latest_tag.lstrip("v").split("-")[0]
 major, minor, patch = map(int, version.split("."))
 
-new_tag = None
+new_tag_base = None
 
 if branch == "develop":
     print("📦 Rule: develop → MINOR bump")
     minor += 1
     patch = 0
-    new_tag = f"v{major}.{minor}.{patch}"
+    new_tag_base = f"v{major}.{minor}.{patch}"
 
-elif branch == "main":
+elif branch == "master":
     last_msg = repo.head.commit.message
     print(f"🔍 Merge commit message: {last_msg}")
     if "from release_" in last_msg:
         print("🚀 Rule: release_* → MAJOR bump")
         major += 1
         minor = patch = 0
-        new_tag = f"v{major}.{minor}.{patch}"
+        new_tag_base = f"v{major}.{minor}.{patch}"
     elif "from hotfix_" in last_msg:
         print("🩹 Rule: hotfix_* → PATCH bump")
         patch += 1
-        new_tag = f"v{major}.{minor}.{patch}"
+        new_tag_base = f"v{major}.{minor}.{patch}"
     else:
         print("⚠️ No rule matched. Skipping.")
         exit(0)
 else:
     print(f"⚠️ No versioning rule for branch: {branch}")
     exit(0)
+
+# Add date to tag
+date_suffix = datetime.now().strftime("%Y%m%d")
+new_tag = f"{new_tag_base}-{date_suffix}"
 
 # Check if tag already exists
 if any(str(t) == new_tag for t in repo.tags):
@@ -61,4 +65,4 @@ subprocess.run([
 subprocess.run(["git", "tag", new_tag], check=True)
 subprocess.run(["git", "push", "origin", new_tag], check=True)
 
-print(f"✅ Tag {new_tag} created and pushed successfully!!")
+print(f"✅ Tag {new_tag} created and pushed successfully!")
