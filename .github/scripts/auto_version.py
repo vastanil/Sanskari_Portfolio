@@ -1,5 +1,6 @@
 import os
 import subprocess
+import re
 from datetime import datetime
 import git  # GitPython
 
