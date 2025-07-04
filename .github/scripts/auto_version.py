@@ -1,13 +1,14 @@
 import os
 import subprocess
-from datetime import datetime
 import re
+from datetime import datetime
 import git  # GitPython
 
-# Constants for files
+# Constants
 VERSION_FILE = "VERSION"
 HISTORY_FILE = "VERSION_HISTORY.md"
 
+# Initialize repo
 repo = git.Repo(".")
 branch = repo.active_branch.name
 print(f"🧠 Current branch: {branch}")
@@ -24,6 +25,7 @@ major, minor, patch = map(int, version.split("."))
 new_tag_base = None
 source_branch = None
 
+# Handle develop branch (MINOR bump)
 if branch == "develop":
     print("📦 Rule: develop → MINOR bump")
     minor += 1
@@ -31,16 +33,33 @@ if branch == "develop":
     new_tag_base = f"v{major}.{minor}.{patch}"
     source_branch = "develop"
 
+# Handle master branch merges
 elif branch == "master":
-    last_msg = repo.head.commit.message
-    print(f"🔍 Merge commit message: {last_msg}")
+    merge_commit = repo.head.commit
+    parents = merge_commit.parents
 
-    # Extract source branch from merge message
-    match = re.search(r'from\s+[\w\-]+/([\w\-]+)', last_msg)
-    merged_branch = match.group(1) if match else ''
+    if len(parents) < 2:
+        print("⚠️ Not a merge commit. Skipping.")
+        exit(0)
+
+    # Parent 2 is the merged commit
+    merged_commit = parents[1]
+
+    # Try to identify the branch merged
+    merged_branch = None
+    for ref in repo.remotes.origin.refs:
+        if ref.commit == merged_commit:
+            merged_branch = ref.name.replace("origin/", "")
+            break
+
+    if not merged_branch:
+        print("⚠️ Could not determine merged branch name. Skipping.")
+        exit(0)
+
     source_branch = merged_branch
     print(f"🔍 Merged branch: {merged_branch}")
 
+    # Decide bump level
     if merged_branch.startswith("release_"):
         print("🚀 Rule: release_* → MAJOR bump")
         major += 1
@@ -51,8 +70,9 @@ elif branch == "master":
         patch += 1
         new_tag_base = f"v{major}.{minor}.{patch}"
     else:
-        print("⚠️ No rule matched for merged branch. Skipping.")
+        print("⚠️ No versioning rule matched for merged branch. Skipping.")
         exit(0)
+
 else:
     print(f"⚠️ No versioning rule for branch: {branch}")
     exit(0)
@@ -68,7 +88,7 @@ if any(str(t) == new_tag for t in repo.tags):
 
 print(f"🏷️ Creating new tag: {new_tag}")
 
-# Git user setup
+# Git setup
 subprocess.run(["git", "config", "--global", "user.name", "github-actions[bot]"])
 subprocess.run(["git", "config", "--global", "user.email", "github-actions[bot]@users.noreply.github.com"])
 subprocess.run([
@@ -84,13 +104,14 @@ print(f"✅ Tag {new_tag} created and pushed successfully!")
 # Write to VERSION file
 with open(VERSION_FILE, "w") as vf:
     vf.write(new_tag + "\n")
-print(f"📝 VERSION file updated with {new_tag}")
+print(f"📝 VERSION file updated.")
 
 # Append to VERSION_HISTORY.md
-history_entry = f"- {new_tag} | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Source: {source_branch or branch}\n"
+history_line = f"- {new_tag} | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Source: {source_branch or branch}\n"
 if not os.path.exists(HISTORY_FILE):
     with open(HISTORY_FILE, "w") as hf:
         hf.write("# Version History\n\n")
 with open(HISTORY_FILE, "a") as hf:
-    hf.write(history_entry)
-print(f"🗂️ VERSION_HISTORY.md updated.")
+    hf.write(history_line)
+print(f"🗂️ VERSION_HISTORY.md updated..")
+
