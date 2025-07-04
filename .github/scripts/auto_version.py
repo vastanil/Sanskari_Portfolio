@@ -25,7 +25,7 @@ major, minor, patch = map(int, version.split("."))
 new_tag_base = None
 source_branch = None
 
-# Handle develop branch (MINOR bump)
+# Handle develop branch
 if branch == "develop":
     print("📦 Rule: develop → MINOR bump")
     minor += 1
@@ -33,7 +33,7 @@ if branch == "develop":
     new_tag_base = f"v{major}.{minor}.{patch}"
     source_branch = "develop"
 
-# Handle master branch merges
+# Handle master branch
 elif branch == "master":
     merge_commit = repo.head.commit
     parents = merge_commit.parents
@@ -42,10 +42,9 @@ elif branch == "master":
         print("⚠️ Not a merge commit. Skipping.")
         exit(0)
 
-    # Parent 2 is the merged commit
     merged_commit = parents[1]
 
-    # Try to identify the branch merged
+    # Detect merged branch
     merged_branch = None
     for ref in repo.remotes.origin.refs:
         if ref.commit == merged_commit:
@@ -59,7 +58,6 @@ elif branch == "master":
     source_branch = merged_branch
     print(f"🔍 Merged branch: {merged_branch}")
 
-    # Decide bump level
     if merged_branch.startswith("release_"):
         print("🚀 Rule: release_* → MAJOR bump")
         major += 1
@@ -81,14 +79,14 @@ else:
 date_suffix = datetime.now().strftime("%Y%m%d")
 new_tag = f"{new_tag_base}-{date_suffix}"
 
-# Check if tag already exists
+# Skip if tag exists
 if any(str(t) == new_tag for t in repo.tags):
     print(f"⚠️ Tag {new_tag} already exists. Skipping.")
     exit(0)
 
 print(f"🏷️ Creating new tag: {new_tag}")
 
-# Git setup
+# Git config
 subprocess.run(["git", "config", "--global", "user.name", "github-actions[bot]"])
 subprocess.run(["git", "config", "--global", "user.email", "github-actions[bot]@users.noreply.github.com"])
 subprocess.run([
@@ -96,12 +94,12 @@ subprocess.run([
     f"https://x-access-token:{os.environ['GITHUB_TOKEN']}@github.com/{os.environ['GITHUB_REPOSITORY']}.git"
 ])
 
-# Create and push tag
+# Tag and push
 subprocess.run(["git", "tag", new_tag], check=True)
 subprocess.run(["git", "push", "origin", new_tag], check=True)
 print(f"✅ Tag {new_tag} created and pushed successfully!")
 
-# Write to VERSION file
+# Write to VERSION
 with open(VERSION_FILE, "w") as vf:
     vf.write(new_tag + "\n")
 print(f"📝 VERSION file updated.")
@@ -113,5 +111,10 @@ if not os.path.exists(HISTORY_FILE):
         hf.write("# Version History\n\n")
 with open(HISTORY_FILE, "a") as hf:
     hf.write(history_line)
-print(f"🗂️ VERSION_HISTORY.md updated..")
+print("🗂️ VERSION_HISTORY.md updated.")
 
+# Add, commit and push both files
+subprocess.run(["git", "add", VERSION_FILE, HISTORY_FILE], check=True)
+subprocess.run(["git", "commit", "-m", f"🔖 Update {VERSION_FILE} and {HISTORY_FILE} for {new_tag}"], check=True)
+subprocess.run(["git", "push", "origin", branch], check=True)
+print("📤 VERSION and VERSION_HISTORY.md committed and pushed.")
