@@ -3,7 +3,8 @@ import subprocess
 from datetime import datetime
 import git  # GitPython
 
-# Constants
+# Constants for files
+
 VERSION_FILE = "VERSION"
 HISTORY_FILE = "VERSION_HISTORY.md"
 
@@ -38,19 +39,9 @@ elif branch == "master":
         print("⚠️ Not a merge commit. Skipping.")
         exit(0)
 
-    # Parent 2 is the merged commit
-    merged_commit = parents[1]
-
-    # Detect merged branch name
-    merged_branch = None
-    for ref in repo.remotes.origin.refs:
-        if ref.commit == merged_commit:
-            merged_branch = ref.name.replace("origin/", "")
-            break
-
-    if not merged_branch:
-        print("⚠️ Could not determine merged branch name. Skipping.")
-        exit(0)
+    # Extract source branch from merge message
+    match = re.search(r'from\s+[\w\-]+/([\w\-]+)', last_msg)
+    merged_branch = match.group(1) if match else ''
 
     source_branch = merged_branch
     print(f"🔍 Merged branch: {merged_branch}")
@@ -84,27 +75,32 @@ if any(str(t) == new_tag for t in repo.tags):
 
 print(f"🏷️ Creating new tag: {new_tag}")
 
-# Git setup and tag push
+# Git user setup
+
 subprocess.run(["git", "config", "--global", "user.name", "github-actions[bot]"])
 subprocess.run(["git", "config", "--global", "user.email", "github-actions[bot]@users.noreply.github.com"])
 subprocess.run([
     "git", "remote", "set-url", "origin",
     f"https://x-access-token:{os.environ['GITHUB_TOKEN']}@github.com/{os.environ['GITHUB_REPOSITORY']}.git"
 ])
+
+# Create and push tag
 subprocess.run(["git", "tag", new_tag], check=True)
 subprocess.run(["git", "push", "origin", new_tag], check=True)
 print(f"✅ Tag {new_tag} created and pushed successfully!")
 
-# Write VERSION file
+# Write to VERSION file
 with open(VERSION_FILE, "w") as vf:
     vf.write(new_tag + "\n")
-print(f"📝 VERSION file updated.")
+print(f"📝 VERSION file updated with {new_tag}")
 
 # Append to VERSION_HISTORY.md
-history_line = f"- {new_tag} | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Source: {source_branch or branch}\n"
+history_entry = f"- {new_tag} | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Source: {source_branch or branch}\n"
+
 if not os.path.exists(HISTORY_FILE):
     with open(HISTORY_FILE, "w") as hf:
         hf.write("# Version History\n\n")
 with open(HISTORY_FILE, "a") as hf:
-    hf.write(history_line)
-print("🗂️ VERSION_HISTORY.md updated.")
+    hf.write(history_entry)
+print(f"🗂️ VERSION_HISTORY.md updated.")
+
