@@ -61,4 +61,4 @@ subprocess.run([
 subprocess.run(["git", "tag", new_tag], check=True)
 subprocess.run(["git", "push", "origin", new_tag], check=True)
 
-print(f"✅ Tag {new_tag} created and pushed successfully!")
+print(f"✅ Tag {new_tag} created and pushed successfully!!")
