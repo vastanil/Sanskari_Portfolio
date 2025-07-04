@@ -112,5 +112,6 @@ if not os.path.exists(HISTORY_FILE):
     with open(HISTORY_FILE, "w") as hf:
         hf.write("# Version History\n\n")
 with open(HISTORY_FILE, "a") as hf:
-    hf.write(history_line)
-print("🗂️ VERSION_HISTORY.md updated.")
+    hf.write(history_entry)
+print(f"🗂️ VERSION_HISTORY.md updated..")
+
