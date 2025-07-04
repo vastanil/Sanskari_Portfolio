@@ -1,6 +1,7 @@
 import os
 import subprocess
 from datetime import datetime
+import re
 import git  # GitPython
 
 repo = git.Repo(".")
@@ -28,23 +29,29 @@ if branch == "develop":
 elif branch == "master":
     last_msg = repo.head.commit.message
     print(f"🔍 Merge commit message: {last_msg}")
-    if "from release_" in last_msg:
+
+    # Extract source branch from merge message
+    match = re.search(r'from\s+[\w\-]+/([\w\-]+)', last_msg)
+    merged_branch = match.group(1) if match else ''
+    print(f"🔍 Merged branch: {merged_branch}")
+
+    if merged_branch.startswith("release_"):
         print("🚀 Rule: release_* → MAJOR bump")
         major += 1
         minor = patch = 0
         new_tag_base = f"v{major}.{minor}.{patch}"
-    elif "from hotfix_" in last_msg:
+    elif merged_branch.startswith("hotfix_"):
         print("🩹 Rule: hotfix_* → PATCH bump")
         patch += 1
         new_tag_base = f"v{major}.{minor}.{patch}"
     else:
-        print("⚠️ No rule matched. Skipping.")
+        print("⚠️ No rule matched for merged branch. Skipping.")
         exit(0)
 else:
     print(f"⚠️ No versioning rule for branch: {branch}")
     exit(0)
 
-# Add date to tag
+# Add date suffix to tag
 date_suffix = datetime.now().strftime("%Y%m%d")
 new_tag = f"{new_tag_base}-{date_suffix}"
 
